@@ -49,6 +49,28 @@ IF OBJECT_ID('__schema__.Checkpoints', 'U') IS NULL
         );
     END
 
+IF OBJECT_ID('__schema__.ShardLeases', 'U') IS NULL
+    BEGIN
+        CREATE TABLE __schema__.ShardLeases (
+            ShardId INT PRIMARY KEY,
+            OwnerPod NVARCHAR(100) NULL,
+            LeaseExpiresAt DATETIME2 NULL,
+            Version BIGINT NOT NULL DEFAULT 0
+        );
+    END
+
+IF OBJECT_ID('__schema__.ShardedCheckpoints', 'U') IS NULL
+    BEGIN
+        CREATE TABLE __schema__.ShardedCheckpoints
+        (
+            Id       NVARCHAR(128) NOT NULL,
+            ShardId  INT           NOT NULL,
+            Position BIGINT            NULL,
+            CONSTRAINT PK_ShardedCheckpoints PRIMARY KEY CLUSTERED (Id, ShardId),
+            CONSTRAINT FK_ShardedCheckpoints_ShardId FOREIGN KEY (ShardId) REFERENCES __schema__.ShardLeases (ShardId)
+        );
+    END
+
 IF TYPE_ID('__schema__.StreamMessage') IS NULL
     BEGIN
         CREATE type __schema__.StreamMessage AS TABLE
@@ -59,3 +81,13 @@ IF TYPE_ID('__schema__.StreamMessage') IS NULL
             json_metadata NVARCHAR(MAX)    NOT NULL
         )
     END
+
+-- Initialize ShardLeases with shard IDs 0 to 127. That should be enough
+;WITH Shards AS (
+    SELECT TOP (128) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS ShardId
+    FROM sys.all_objects
+)
+
+INSERT INTO __schema__.ShardLeases (ShardId, OwnerPod, LeaseExpiresAt, Version)
+SELECT ShardId, NULL, NULL, 0 FROM Shards
+WHERE NOT EXISTS (SELECT 1 FROM __schema__.ShardLeases SL WHERE SL.ShardId = Shards.ShardId);

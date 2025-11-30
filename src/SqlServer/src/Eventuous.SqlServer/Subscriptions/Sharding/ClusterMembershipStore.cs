@@ -11,8 +11,8 @@ public class ClusterMembershipStore : ClusterMembershipStoreBase
     private readonly string connectionString;
     private readonly string schema;
 
-    public ClusterMembershipStore(SqlServerStoreOptions options, string machineName, ILoggerFactory loggerFactory) 
-    : base(options, machineName, loggerFactory)
+    public ClusterMembershipStore(SqlServerStoreOptions options, ClusterMembershipOptions clusterOptions, ILoggerFactory loggerFactory) 
+    : base(clusterOptions, loggerFactory)
     {
         connectionString = Ensure.NotEmptyString(options.ConnectionString);
         schema = Ensure.NotEmptyString(options.Schema);

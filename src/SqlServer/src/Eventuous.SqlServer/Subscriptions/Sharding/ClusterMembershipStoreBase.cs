@@ -16,19 +16,19 @@ public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembe
     private readonly string _machineName;
     private readonly TimeSpan _heartbeatInterval;
     private readonly TimeSpan _expirationTimeout;
-    private readonly TimeSpan _renewalInterval;
+    private readonly TimeSpan _refreshInterval;
 
     public IReadOnlyList<string> Members => _members.AsReadOnly();
     
     private List<string> _members = [];
 
-    protected ClusterMembershipStoreBase(SqlServerStoreOptions options, string machineName, ILoggerFactory loggerFactory)
+    protected ClusterMembershipStoreBase(ClusterMembershipOptions options, ILoggerFactory loggerFactory)
     {
         _logger = loggerFactory.CreateLogger<ClusterMembershipStoreBase>();
-        _machineName = machineName;
-        _heartbeatInterval = TimeSpan.FromSeconds(options.ClusterMembership.HeartbeatIntervalSeconds);
-        _expirationTimeout = TimeSpan.FromSeconds(options.ClusterMembership.ExpirationTimeoutSeconds);
-        _renewalInterval = TimeSpan.FromSeconds(options.ClusterMembership.RenewIntervalSeconds);
+        _machineName = options.MachineName;
+        _heartbeatInterval = TimeSpan.FromSeconds(options.HeartbeatIntervalSeconds);
+        _expirationTimeout = TimeSpan.FromSeconds(options.ExpirationTimeoutSeconds);
+        _refreshInterval = TimeSpan.FromSeconds(options.RefreshIntervalSeconds);
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -38,7 +38,7 @@ public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembe
         // Register this machine
         await RegisterMemberAsync(_machineName, ExpiresAt(), cancellationToken).NoContext();
 
-        // Renew membership every 15 seconds
+        // Renew membership every heartbeat seconds
         _renewalTimer = new Timer(
             async _ => await RenewMembershipAsync(),
             null,
@@ -46,12 +46,12 @@ public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembe
             _heartbeatInterval
         );
 
-        // Read membership list every 5 seconds
+        // Read membership list every refresh seconds
         _readTimer = new Timer(
             async _ => await ReadMembersAsync(),
             null,
-            _renewalInterval,
-            _renewalInterval
+            _refreshInterval,
+            _refreshInterval
         );
 
         // Initial read

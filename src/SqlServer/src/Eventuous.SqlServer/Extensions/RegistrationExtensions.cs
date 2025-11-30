@@ -87,12 +87,13 @@ public static class ServiceCollectionExtensions {
                 }
             );
 
-        public IServiceCollection AddSqlServerClusterMembershipStore() {
+        public IServiceCollection AddSqlServerClusterMembershipStore(ClusterMembershipOptions? options = null) {
+            var clusterOptions = options ?? new ClusterMembershipOptions();
             services.AddSingleton(sp => new ClusterMembershipStore(
-                sp.GetRequiredService<SqlServerStoreOptions>(),
-                Environment.MachineName,
-                sp.GetRequiredService<ILoggerFactory>()
-            ));
+                                sp.GetRequiredService<SqlServerStoreOptions>(),
+                                clusterOptions,
+                                sp.GetRequiredService<ILoggerFactory>()
+                            ));
             services.AddHostedService(sp => sp.GetRequiredService<ClusterMembershipStore>());
             services.AddSingleton<IClusterMembershipStore>(sp => sp.GetRequiredService<ClusterMembershipStore>());
             return services;

@@ -1,4 +1,4 @@
-namespace Eventuous.Subscriptions.Checkpoints;
+namespace Eventuous.Subscriptions.Checkpoints.Sharding;
 
 [PublicAPI]
 public interface IShardedCheckpointStore {

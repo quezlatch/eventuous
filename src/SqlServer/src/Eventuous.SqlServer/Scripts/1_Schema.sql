@@ -55,7 +55,7 @@ IF OBJECT_ID('__schema__.ShardLeases', 'U') IS NULL
             ShardId INT PRIMARY KEY,
             OwnerPod NVARCHAR(100) NULL,
             LeaseExpiresAt DATETIME2 NULL,
-            Version BIGINT NOT NULL DEFAULT 0
+            [Version] ROWVERSION
         );
     END
 
@@ -82,12 +82,22 @@ IF TYPE_ID('__schema__.StreamMessage') IS NULL
         )
     END
 
+-- cluster membership store table
+IF OBJECT_ID('__schema__.ClusterMembers', 'U') IS NULL
+    BEGIN
+        CREATE TABLE __schema__.ClusterMembers
+        (
+            MachineName NVARCHAR(200) PRIMARY KEY,
+            ExpiresAt DATETIME2 NOT NULL
+        );
+    END
+
 -- Initialize ShardLeases with shard IDs 0 to 127. That should be enough
 ;WITH Shards AS (
     SELECT TOP (128) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS ShardId
     FROM sys.all_objects
 )
 
-INSERT INTO __schema__.ShardLeases (ShardId, OwnerPod, LeaseExpiresAt, Version)
-SELECT ShardId, NULL, NULL, 0 FROM Shards
+INSERT INTO __schema__.ShardLeases (ShardId, OwnerPod, LeaseExpiresAt)
+SELECT ShardId, NULL, NULL FROM Shards
 WHERE NOT EXISTS (SELECT 1 FROM __schema__.ShardLeases SL WHERE SL.ShardId = Shards.ShardId);

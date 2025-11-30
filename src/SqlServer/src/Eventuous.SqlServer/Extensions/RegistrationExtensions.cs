@@ -4,6 +4,8 @@
 using Eventuous.SqlServer;
 using Eventuous.SqlServer.Projections;
 using Eventuous.SqlServer.Subscriptions;
+using Eventuous.SqlServer.Subscriptions.Sharding;
+using Eventuous.Subscriptions.Checkpoints.Sharding;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -48,7 +50,7 @@ public static class ServiceCollectionExtensions {
         /// <returns></returns>
         public IServiceCollection AddEventuousSqlServer(IConfiguration config) {
             services.Configure<SqlServerStoreOptions>(config);
-            services.AddSingleton<SqlServerStoreOptions>(sp => sp.GetRequiredService<IOptions<SqlServerStoreOptions>>().Value);
+            services.AddSingleton(sp => sp.GetRequiredService<IOptions<SqlServerStoreOptions>>().Value);
             services.AddSingleton<SqlServerStore>();
             services.AddHostedService<SchemaInitializer>();
 
@@ -84,5 +86,16 @@ public static class ServiceCollectionExtensions {
                     return new(Ensure.NotNull(connectionString), schema, loggerFactory);
                 }
             );
+
+        public IServiceCollection AddSqlServerClusterMembershipStore() {
+            services.AddSingleton(sp => new ClusterMembershipStore(
+                sp.GetRequiredService<SqlServerStoreOptions>(),
+                Environment.MachineName,
+                sp.GetRequiredService<ILoggerFactory>()
+            ));
+            services.AddHostedService(sp => sp.GetRequiredService<ClusterMembershipStore>());
+            services.AddSingleton<IClusterMembershipStore>(sp => sp.GetRequiredService<ClusterMembershipStore>());
+            return services;
+        }
     }
 }

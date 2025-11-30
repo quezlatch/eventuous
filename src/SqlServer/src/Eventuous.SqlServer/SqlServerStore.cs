@@ -13,6 +13,14 @@ public record SqlServerStoreOptions {
     public string? ConnectionString   { get; init; }
     public string  Schema             { get; init; } = SqlServer.Schema.DefaultSchema;
     public bool    InitializeDatabase { get; init; }
+    public ClusterMembershipOptions ClusterMembership { get; init; } = new();
+}
+
+public record ClusterMembershipOptions {
+    public int HeartbeatIntervalSeconds { get; init; } = 15;
+    public int ExpirationTimeoutSeconds { get; init; } = 45;
+    public int RenewIntervalSeconds { get; init; } = 10;
+
 }
 
 public class SqlServerStore : SqlEventStoreBase<SqlConnection, SqlTransaction> {

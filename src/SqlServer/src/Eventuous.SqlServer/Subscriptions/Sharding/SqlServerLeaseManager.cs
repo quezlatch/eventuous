@@ -29,9 +29,9 @@ public class SqlServerLeaseManager {
         await using var connection = await ConnectionFactory.GetConnection(connectionString, token).NoContext();
 
         using var cmd = connection.GetStoredProcCommand(aquireLease)
-            .Add("@ShardId", SqlDbType.Int, shardId)
-            .Add("@OwnerPod", SqlDbType.NVarChar, podId)
-            .Add("@Expires", SqlDbType.DateTime2, DateTime.UtcNow + leaseDuration);
+            .Add("@shard_id", SqlDbType.Int, shardId)
+            .Add("@owner", SqlDbType.NVarChar, podId)
+            .Add("@expires", SqlDbType.DateTime2, DateTime.UtcNow + leaseDuration);
 
         var version = await cmd.ExecuteScalarAsync(token);
 

@@ -1,12 +1,14 @@
 CREATE OR ALTER PROCEDURE __schema__.read_all_forwards_sharded
-    @from_position BIGINT,
-    @shard_id INT,
-    @num_shards INT,
-    @count INT
+    @checkpoint_id NVARCHAR(128),
+    @owner NVARCHAR(100),
+    @count INT = 1000
 AS
 BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
+    DECLARE @MinGlobalPosition BIGINT;
+
+    SELECT @MinGlobalPosition = MIN(ISNULL(Position, 0))
+    FROM __schema__.ShardedCheckpoints
+    WHERE Id = @checkpoint_id;
 
     SELECT TOP (@count)
         m.MessageId,
@@ -16,10 +18,16 @@ BEGIN
         m.JsonData,
         m.JsonMetadata,
         m.Created,
+        m.ShardId,
         s.StreamName
     FROM __schema__.Messages m
+    JOIN __schema__.ShardLeases sl ON
+        sl.ShardId = m.ShardId AND sl.[Owner] = @owner AND sl.LeaseExpiresAt > SYSUTCDATETIME()
     JOIN __schema__.Streams s ON m.StreamId = s.StreamId
-    WHERE m.GlobalPosition >= @from_position
-        AND m.StreamId % @num_shards = @shard_id
-    ORDER BY m.GlobalPosition;
+    LEFT JOIN __schema__.ShardedCheckpoints sc ON
+        sc.Id = @checkpoint_id AND sc.ShardId = sl.ShardId
+    WHERE m.GlobalPosition >= @MinGlobalPosition
+      AND m.GlobalPosition >= ISNULL(sc.Position, 0)
+    ORDER BY m.GlobalPosition
+    OPTION (RECOMPILE); -- optional: helps optimizer use actual @MinGlobalPosition and other params
 END;

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Eventuous.SqlServer;
 
-public class Schema(string schema = Schema.DefaultSchema) {
+public class Schema(string schema = Schema.DefaultSchema, int numOfShards = 20) {
     public const string DefaultSchema = "eventuous";
 
     public readonly string AppendEvents        = $"{schema}.append_events";
@@ -34,6 +34,7 @@ public class Schema(string schema = Schema.DefaultSchema) {
         var names = Assembly.GetManifestResourceNames()
             .Where(x => x.EndsWith(".sql"))
             .OrderBy(x => x);
+        var strNumOfShards = numOfShards.ToString();
 
         await using var connection  = await ConnectionFactory.GetConnection(connectionString, cancellationToken).NoContext();
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken).NoContext();
@@ -48,7 +49,7 @@ public class Schema(string schema = Schema.DefaultSchema) {
 #else
                 var script = await reader.ReadToEndAsync().NoContext();
 #endif
-                var cmdScript = script.Replace("__schema__", schema);
+                var cmdScript = script.Replace("__schema__", schema).Replace("__num_of_shards__", strNumOfShards);
 
                 await using var cmd = new SqlCommand(cmdScript, connection, transaction);
                 await cmd.ExecuteNonQueryAsync(cancellationToken).NoContext();

@@ -49,7 +49,7 @@ public class ClusterMembershipStore : ClusterMembershipStoreBase
         .Add("@ExpiresAt", SqlDbType.DateTime2, expiresAt);
         await cmd.ExecuteNonQueryAsync().NoContext();
     }
-    protected override async Task UnregisterMemberAsync(string machineName, CancellationToken cancellationToken) {
+    public override async Task UnregisterMemberAsync(string machineName, CancellationToken cancellationToken) {
         await using var connection = await ConnectionFactory.GetConnection(connectionString, cancellationToken).NoContext();
         using var cmd = connection.GetTextCommand(
             $@"DELETE FROM {schema}.ClusterMembers WHERE MachineName = @MachineName"

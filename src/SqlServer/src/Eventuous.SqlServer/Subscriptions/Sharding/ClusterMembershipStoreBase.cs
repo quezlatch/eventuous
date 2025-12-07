@@ -8,15 +8,11 @@ namespace Eventuous.SqlServer.Subscriptions.Sharding;
 /// Manages cluster membership by registering the current machine in SQL Server
 /// and periodically reading the cluster membership list.
 /// </summary>
-public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembershipStore
+public abstract class ClusterMembershipStoreBase : IClusterMembershipStore
 {
     private readonly ILogger<ClusterMembershipStoreBase> _logger;
-    private Timer? _renewalTimer;
-    private Timer? _readTimer;
     private readonly string _machineName;
-    private readonly TimeSpan _heartbeatInterval;
     private readonly TimeSpan _expirationTimeout;
-    private readonly TimeSpan _refreshInterval;
 
     public IReadOnlyList<string> Members => _members.AsReadOnly();
     
@@ -24,52 +20,12 @@ public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembe
 
     protected ClusterMembershipStoreBase(ClusterMembershipOptions options, ILoggerFactory loggerFactory)
     {
+        _expirationTimeout = TimeSpan.FromSeconds(options.ExpirationTimeoutSeconds);
         _logger = loggerFactory.CreateLogger<ClusterMembershipStoreBase>();
         _machineName = options.MachineName;
-        _heartbeatInterval = TimeSpan.FromSeconds(options.HeartbeatIntervalSeconds);
-        _expirationTimeout = TimeSpan.FromSeconds(options.ExpirationTimeoutSeconds);
-        _refreshInterval = TimeSpan.FromSeconds(options.RefreshIntervalSeconds);
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Starting cluster membership store for machine: {MachineName}", _machineName);
-
-        // Register this machine
-        await RegisterMemberAsync(_machineName, ExpiresAt(), cancellationToken).NoContext();
-
-        // Renew membership every heartbeat seconds
-        _renewalTimer = new Timer(
-            async _ => await RenewMembershipAsync(),
-            null,
-            _heartbeatInterval,
-            _heartbeatInterval
-        );
-
-        // Read membership list every refresh seconds
-        _readTimer = new Timer(
-            async _ => await ReadMembersAsync(),
-            null,
-            _refreshInterval,
-            _refreshInterval
-        );
-
-        // Initial read
-        await ReadMembersAsync().NoContext();
-    }
-
-    public async Task StopAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Stopping cluster membership store for machine: {MachineName}", _machineName);
-
-        _renewalTimer?.Dispose();
-        _readTimer?.Dispose();
-
-        // Remove this machine from the cluster
-        await UnregisterMemberAsync(_machineName, cancellationToken).NoContext();
-    }
-
-    private async Task RenewMembershipAsync()
+    public async Task RenewMembershipAsync()
     {
         try {
             await RenewMemberAsync(_machineName, ExpiresAt()).NoContext();
@@ -83,7 +39,7 @@ public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembe
 
     private DateTime ExpiresAt() => DateTime.UtcNow.Add(_expirationTimeout);
 
-    private async Task ReadMembersAsync()
+    public async Task ReadMembersAsync()
     {
         try
         {
@@ -95,6 +51,9 @@ public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembe
             _logger.LogError(ex, "Error reading cluster members");
         }
     }
+
+    public Task RegisterMemberAsync(string machineName, CancellationToken cancellationToken)
+        => RegisterMemberAsync(machineName, ExpiresAt(), cancellationToken);
 
     /// <summary>
     /// Register the current machine in the cluster membership table.
@@ -114,5 +73,5 @@ public abstract class ClusterMembershipStoreBase : IHostedService, IClusterMembe
     /// <summary>
     /// Remove the machine from the cluster membership table.
     /// </summary>
-    protected abstract Task UnregisterMemberAsync(string machineName,CancellationToken cancellationToken);
+    public abstract Task UnregisterMemberAsync(string machineName,CancellationToken cancellationToken);
 }

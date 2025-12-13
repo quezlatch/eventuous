@@ -11,10 +11,29 @@ public class ClusterMembershipStoreTests(ShardingFixture fixture) {
 
     [Test]
     [DependsOn(nameof(GetMembers))]
-    public async Task HeartbeatWorks() {
-        var alternativeClusterMembershipStore = fixture.CreateNewClusterMembershipStore("second");
-        await alternativeClusterMembershipStore.RegisterMemberAsync(CancellationToken.None);
-        await Task.Delay(TimeSpan.FromSeconds(fixture.ClusterMembershipOptions!.HeartbeatIntervalSeconds + 2));
-        fixture.Members!.ShouldBe([Environment.MachineName, "second"]);
+    [Retry(3)]
+    public async Task MembersLeasesAreRenewed() {
+        var alternativeClusterMembershipStore = fixture.CreateNewClusterMembershipStore("another-machine");
+        try {
+            await alternativeClusterMembershipStore.RegisterMemberAsync(CancellationToken.None);
+            await Task.Delay(TimeSpan.FromSeconds(fixture.ClusterMembershipOptions!.HeartbeatIntervalSeconds));
+            fixture.Members!.ShouldBe(new[]{Environment.MachineName, "another-machine"}.Order());
+        } finally {
+            await alternativeClusterMembershipStore.UnregisterMemberAsync("another-machine", CancellationToken.None);
+        }
+    }
+
+
+    [Test]
+    [DependsOn(nameof(MembersLeasesAreRenewed))]
+    public async Task MembersAreExpired() {
+        var alternativeClusterMembershipStore = fixture.CreateNewClusterMembershipStore("another-machine");
+        try {
+            await alternativeClusterMembershipStore.RegisterMemberAsync(CancellationToken.None);
+            await Task.Delay(TimeSpan.FromSeconds(fixture.ClusterMembershipOptions!.ExpirationTimeoutSeconds + 2));
+            fixture.Members!.ShouldBe([Environment.MachineName]);
+        } finally {
+            await alternativeClusterMembershipStore.UnregisterMemberAsync("another-machine", CancellationToken.None);
+        }
     }
 }

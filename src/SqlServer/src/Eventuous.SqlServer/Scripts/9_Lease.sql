@@ -1,21 +1,12 @@
-CREATE OR ALTER PROCEDURE __schema__.aquire_lease
-    @shard_id INT,
+CREATE OR ALTER PROCEDURE __schema__.aquire_renew_lease
     @owner NVARCHAR(100),
-    @expires DATETIME2
+    @expirationTimeout BIGINT,
+    @shard_ids __schema__.ShardIdList READONLY
 AS
 BEGIN
     UPDATE __schema__.ShardLeases
     SET [Owner] = @owner,
-        LeaseExpiresAt = @expires
-    WHERE ShardId = @shard_id
+        LeaseExpiresAt = DATEADD(SECOND, @expirationTimeout, SYSUTCDATETIME())
+    WHERE ShardId IN (SELECT ShardId FROM @shard_ids)
     AND ([Owner] IS NULL OR LeaseExpiresAt < SYSUTCDATETIME())
-
-    IF @@ROWCOUNT = 1
-    BEGIN
-        SELECT [Version] FROM __schema__.ShardLeases WHERE ShardId = @shard_id;
-    END
-    ELSE
-    BEGIN
-        SELECT CAST(NULL AS VARBINARY(8)) AS [Version];
-    END
 END;

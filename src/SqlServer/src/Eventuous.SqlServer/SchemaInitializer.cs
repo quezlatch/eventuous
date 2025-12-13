@@ -12,7 +12,7 @@ public class SchemaInitializer(SqlServerStoreOptions options, ILoggerFactory? lo
     public async Task StartAsync(CancellationToken cancellationToken) {
         if (!options.InitializeDatabase) return;
 
-        var schema           = new Schema(options.Schema);
+        var schema           = new Schema(options.Schema, options.NumOfShards);
         var connectionString = Ensure.NotEmptyString(options.ConnectionString);
 
         Exception? ex = null;

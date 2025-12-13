@@ -103,5 +103,21 @@ public static class ServiceCollectionExtensions {
             services.AddSingleton<IClusterMembershipStore>(sp => sp.GetRequiredService<ClusterMembershipStoreBase>());
             return services;
         }
+
+        public IServiceCollection AddSqlServerShardLeaseManager() {
+            services.AddSingleton(sp => {
+                var storeOptions = sp.GetRequiredService<SqlServerStoreOptions>();
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                var clusterMembership = sp.GetRequiredService<IClusterMembershipStore>();
+                return new SqlServerLeaseManager(clusterMembership, storeOptions.ConnectionString!, storeOptions.Schema, storeOptions.NumOfShards);
+            });
+            services.AddHostedService(sp =>
+                new SqlServerLeaseService(
+                    sp.GetRequiredService<SqlServerLeaseManager>(),
+                    sp.GetRequiredService<ILogger<SqlServerLeaseService>>()
+                ));
+
+            return services;
+        }
     }
 }

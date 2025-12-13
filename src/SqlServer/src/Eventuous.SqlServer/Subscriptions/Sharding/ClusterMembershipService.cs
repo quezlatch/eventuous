@@ -9,15 +9,15 @@ public class ClusterMembershipService : IHostedService
     private Timer? _renewalTimer;
     private Timer? _readTimer;
     private readonly string _machineName;
-    private readonly TimeSpan _heartbeatInterval;
-    private readonly TimeSpan _refreshInterval;
+    private readonly int _heartbeatInterval;
+    private readonly int _refreshInterval;
     private readonly ClusterMembershipStoreBase _store;
 
     public ClusterMembershipService(ClusterMembershipStoreBase store, ClusterMembershipOptions options, ILogger<ClusterMembershipService> logger)
     {
         _machineName = options.MachineName;
-        _heartbeatInterval = TimeSpan.FromSeconds(options.HeartbeatIntervalSeconds);
-        _refreshInterval = TimeSpan.FromSeconds(options.RefreshIntervalSeconds);
+        _heartbeatInterval = options.HeartbeatIntervalSeconds * 1000;
+        _refreshInterval = options.RefreshIntervalSeconds * 1000;
         _store = store;
         _logger = logger;
     }
@@ -27,7 +27,7 @@ public class ClusterMembershipService : IHostedService
         _logger.LogInformation("Starting cluster membership store for machine: {MachineName}", _machineName);
 
         // Register this machine
-        await _store.RegisterMemberAsync(_machineName, cancellationToken).NoContext();
+        await _store.RegisterMemberAsync(cancellationToken).NoContext();
 
         // Renew membership every heartbeat seconds
         _renewalTimer = new Timer(
@@ -41,7 +41,7 @@ public class ClusterMembershipService : IHostedService
         _readTimer = new Timer(
             async _ => await _store.ReadMembersAsync(),
             null,
-            _refreshInterval,
+            0, // initial read
             _refreshInterval
         );
 

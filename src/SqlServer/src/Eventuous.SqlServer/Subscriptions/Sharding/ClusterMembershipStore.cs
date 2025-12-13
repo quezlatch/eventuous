@@ -10,19 +10,21 @@ public class ClusterMembershipStore : ClusterMembershipStoreBase
 {
     private readonly string connectionString;
     private readonly string schema;
+    private readonly ILogger<ClusterMembershipStore> logger;
 
     public ClusterMembershipStore(SqlServerStoreOptions options, ClusterMembershipOptions clusterOptions, ILoggerFactory loggerFactory) 
     : base(clusterOptions, loggerFactory)
     {
         connectionString = Ensure.NotEmptyString(options.ConnectionString);
         schema = Ensure.NotEmptyString(options.Schema);
+        logger = loggerFactory.CreateLogger<ClusterMembershipStore>();
     }
 
     protected override async Task<IEnumerable<string>> ReadActiveMembersAsync() {
         await using var connection = await ConnectionFactory.GetConnection(connectionString, CancellationToken.None).NoContext();
         using var cmd = connection.GetTextCommand(
-            $"SELECT MachineName FROM {schema}.ClusterMembers WHERE ExpiresAt > @CurrentTime"
-        ).Add("@CurrentTime", SqlDbType.DateTime2, DateTime.UtcNow);
+            $"SELECT MachineName FROM {schema}.ClusterMembers WHERE ExpiresAt > SYSUTCDATETIME()"
+        );
         var members = new List<string>();
         await using var reader = await cmd.ExecuteReaderAsync().NoContext();
         while (await reader.ReadAsync().NoContext()) {
@@ -31,25 +33,28 @@ public class ClusterMembershipStore : ClusterMembershipStoreBase
         return members;
     }
 
-    protected override async Task RegisterMemberAsync(string machineName, DateTime expiresAt, CancellationToken cancellationToken) {
+    public override async Task RegisterMemberAsync(CancellationToken cancellationToken) {
+        logger.LogInformation("Registering cluster member: {MachineName}", _machineName);
         await using var connection = await ConnectionFactory.GetConnection(connectionString, cancellationToken).NoContext();
         using var cmd = connection.GetTextCommand(
-            $@"INSERT INTO {schema}.ClusterMembers (MachineName, ExpiresAt) VALUES (@MachineName, @ExpiresAt)"
+            $@"INSERT INTO {schema}.ClusterMembers (MachineName, ExpiresAt) VALUES (@MachineName, DATEADD(SECOND, @ExpirationTimeout, SYSUTCDATETIME()))"
         )
-        .Add("@MachineName", SqlDbType.NVarChar, machineName)
-        .Add("@ExpiresAt", SqlDbType.DateTime2, expiresAt);
+        .Add("@MachineName", SqlDbType.NVarChar, _machineName)
+        .Add("@ExpirationTimeout", SqlDbType.Int, _expirationTimeout);
         await cmd.ExecuteNonQueryAsync(cancellationToken).NoContext();
     }
-    protected override async Task RenewMemberAsync(string machineName, DateTime expiresAt) {
+    public override async Task RenewMembershipAsync() {
+        logger.LogInformation("Renewing cluster member: {MachineName}", _machineName);
         await using var connection = await ConnectionFactory.GetConnection(connectionString, CancellationToken.None).NoContext();
         using var cmd = connection.GetTextCommand(
-            $@"UPDATE {schema}.ClusterMembers SET ExpiresAt = @ExpiresAt WHERE MachineName = @MachineName"
+            $@"UPDATE {schema}.ClusterMembers SET ExpiresAt = DATEADD(SECOND, @ExpirationTimeout, SYSUTCDATETIME()) WHERE MachineName = @MachineName"
         )
-        .Add("@MachineName", SqlDbType.NVarChar, machineName)
-        .Add("@ExpiresAt", SqlDbType.DateTime2, expiresAt);
+        .Add("@MachineName", SqlDbType.NVarChar, _machineName)
+        .Add("@ExpirationTimeout", SqlDbType.Int, _expirationTimeout);
         await cmd.ExecuteNonQueryAsync().NoContext();
     }
     public override async Task UnregisterMemberAsync(string machineName, CancellationToken cancellationToken) {
+        logger.LogInformation("Unregistering cluster member: {MachineName}", machineName);
         await using var connection = await ConnectionFactory.GetConnection(connectionString, cancellationToken).NoContext();
         using var cmd = connection.GetTextCommand(
             $@"DELETE FROM {schema}.ClusterMembers WHERE MachineName = @MachineName"

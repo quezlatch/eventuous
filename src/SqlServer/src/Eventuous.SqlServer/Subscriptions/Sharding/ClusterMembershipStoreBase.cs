@@ -1,5 +1,4 @@
 using Eventuous.Subscriptions.Checkpoints.Sharding;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Eventuous.SqlServer.Subscriptions.Sharding;
@@ -11,40 +10,34 @@ namespace Eventuous.SqlServer.Subscriptions.Sharding;
 public abstract class ClusterMembershipStoreBase : IClusterMembershipStore
 {
     private readonly ILogger<ClusterMembershipStoreBase> _logger;
-    private readonly string _machineName;
-    private readonly TimeSpan _expirationTimeout;
+    protected readonly string _machineName;
+    protected readonly int _expirationTimeout;
 
-    public IReadOnlyList<string> Members => _members.AsReadOnly();
-    
+    public string Owner => _machineName;
+
     private List<string> _members = [];
+
+    public event EventHandler<MembershipChangedEventArgs> MembershipChanged;
 
     protected ClusterMembershipStoreBase(ClusterMembershipOptions options, ILoggerFactory loggerFactory)
     {
-        _expirationTimeout = TimeSpan.FromSeconds(options.ExpirationTimeoutSeconds);
+        _expirationTimeout = options.ExpirationTimeoutSeconds;
         _logger = loggerFactory.CreateLogger<ClusterMembershipStoreBase>();
         _machineName = options.MachineName;
     }
-
-    public async Task RenewMembershipAsync()
-    {
-        try {
-            await RenewMemberAsync(_machineName, ExpiresAt()).NoContext();
-        } catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error renewing cluster membership");
-        }
-    }
-
-    public Task<IEnumerable<string>> GetMembersAsync() => Task.FromResult(_members.AsEnumerable());
-
-    private DateTime ExpiresAt() => DateTime.UtcNow.Add(_expirationTimeout);
 
     public async Task ReadMembersAsync()
     {
         try
         {
             var members = await ReadActiveMembersAsync().NoContext();
-            _members = [.. members];
+            var orderedMembers = members.Order().ToArray();
+            if (!orderedMembers.SequenceEqual(_members))
+            {
+                _members = [.. orderedMembers];
+                _logger.LogInformation("Cluster membership changed: {Members}", orderedMembers);
+                MembershipChanged?.Invoke(this, new MembershipChangedEventArgs(_members));
+            }
         }
         catch (Exception ex)
         {
@@ -52,18 +45,15 @@ public abstract class ClusterMembershipStoreBase : IClusterMembershipStore
         }
     }
 
-    public Task RegisterMemberAsync(string machineName, CancellationToken cancellationToken)
-        => RegisterMemberAsync(machineName, ExpiresAt(), cancellationToken);
-
     /// <summary>
     /// Register the current machine in the cluster membership table.
     /// </summary>
-    protected abstract Task RegisterMemberAsync(string machineName, DateTime expiresAt, CancellationToken cancellationToken);
+    public abstract Task RegisterMemberAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Renew the membership expiration for the given machine.
     /// </summary>
-    protected abstract Task RenewMemberAsync(string machineName, DateTime expiresAt);
+    public abstract Task RenewMembershipAsync();
 
     /// <summary>
     /// Read all active (non-expired) cluster members.

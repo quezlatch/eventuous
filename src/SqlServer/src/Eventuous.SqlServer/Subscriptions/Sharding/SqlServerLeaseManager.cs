@@ -1,47 +1,79 @@
 using Eventuous.SqlServer.Extensions;
+using Eventuous.Subscriptions.Checkpoints.Sharding;
 using Microsoft.Extensions.Logging;
 
-namespace Eventuous.SqlServer.Subscriptions;
+namespace Eventuous.SqlServer.Subscriptions.Sharding;
 
-public record ShardLease(int ShardId, string OwnerPod, byte[] Version);
+public record ShardLease(int ShardId, string Owner);
 
 public class SqlServerLeaseManager {
+    readonly IClusterMembershipStore store;
     readonly string connectionString;
     readonly string schemaName;
+    readonly int numOfShards;
     readonly ILoggerFactory? loggerFactory;
     private readonly string aquireLease;
+    private List<string> _members;
+    private SqlParameter? _shardIdsParameter;
 
-    public SqlServerLeaseManager(string connectionString, string schemaName, ILoggerFactory? loggerFactory = null)
+    public SqlServerLeaseManager(IClusterMembershipStore store, string connectionString, string schemaName, int numOfShards = 20, ILoggerFactory? loggerFactory = null)
     {
         var schema = new Schema(schemaName);
+        this.store = store;
+        this.store.MembershipChanged += RebuildShardIdParameter;
         this.connectionString = connectionString;
         this.schemaName = schemaName;
+        this.numOfShards = numOfShards;
         this.loggerFactory = loggerFactory;
         this.aquireLease = schema.AquireLease;
     }
 
-    public async Task<ShardLease?> TryAcquireLeaseAsync(
-    int shardId, 
-    string podId,
-    TimeSpan leaseDuration,
-    CancellationToken token)
-    {
-        await using var connection = await ConnectionFactory.GetConnection(connectionString, token).NoContext();
-
-        using var cmd = connection.GetStoredProcCommand(aquireLease)
-            .Add("@shard_id", SqlDbType.Int, shardId)
-            .Add("@owner", SqlDbType.NVarChar, podId)
-            .Add("@expires", SqlDbType.DateTime2, DateTime.UtcNow + leaseDuration);
-
-        var version = await cmd.ExecuteScalarAsync(token);
-
-        return version != DBNull.Value && version != null
-            ? new ShardLease(shardId, podId,  (byte[])version)
-            : null;
+    /// <summary>
+    /// Rebuilds the shard ID parameter used in SQL commands when cluster membership changes.
+    /// Which should hopefully not happen that often.
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
+    private void RebuildShardIdParameter(object? sender, MembershipChangedEventArgs e) {
+        var hasher = new RendezvousHashing(e.Members);
+        var owner = store.Owner;
+        var shardIds = Enumerable.Range(0, numOfShards)
+            .Where(id => hasher.GetOwner(id) == owner);
+        var dataTable = new DataTable();
+        dataTable.Columns.Add("ShardId", typeof(int));
+        foreach (var id in shardIds) {
+            dataTable.Rows.Add(id);
+        }
+        _shardIdsParameter = new SqlParameter("@shardIds", SqlDbType.Structured) {
+            TypeName = $"{schemaName}.ShardIdList",
+            Value = dataTable
+        };
     }
 
-}
+    // public async Task<ShardLease?> TryAcquireLeaseAsync(
+    // int shardId, 
+    // string podId,
+    // TimeSpan leaseDuration,
+    // CancellationToken token)
+    // {
+    //     await using var connection = await ConnectionFactory.GetConnection(connectionString, token).NoContext();
 
+    //     using var cmd = connection.GetStoredProcCommand(aquireLease)
+    //         .Add("@shard_id", SqlDbType.Int, shardId)
+    //         .Add("@owner", SqlDbType.NVarChar, podId)
+    //         .Add("@expires", SqlDbType.DateTime2, DateTime.UtcNow + leaseDuration);
+
+    //     var version = await cmd.ExecuteScalarAsync(token);
+
+    //     return version != DBNull.Value && version != null
+    //         ? new ShardLease(shardId, podId,  (byte[])version)
+    //         : null;
+    // }
+
+    public async Task RenewLeaseAsync() {
+        if (_shardIdsParameter == null) return;
+    }
+}
 
 /*
 

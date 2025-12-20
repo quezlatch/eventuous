@@ -21,7 +21,7 @@ public class Schema(string schema = Schema.DefaultSchema, int numOfShards = 20) 
     public readonly string AddCheckpointSql    = $"INSERT INTO {schema}.Checkpoints (Id) VALUES ((@checkpointId))";
     public readonly string UpdateCheckpointSql = $"UPDATE {schema}.Checkpoints set Position=(@position) where Id=(@checkpointId)";
 
-    public readonly string AquireLease         = $"{schema}.aquire_lease";
+    public readonly string AquireLease         = $"{schema}.aquire_renew_lease";
 
     static readonly Assembly Assembly = typeof(Schema).Assembly;
 

@@ -8,7 +8,7 @@ using Testcontainers.MsSql;
 namespace Eventuous.SqlServer.Subscriptions.Sharding;
 
 public class ShardingFixture() : StoreFixtureBase<MsSqlContainer>(LogLevel.Information) {
-    readonly string _schemaName = GetSchemaName();
+    public readonly string SchemaName = GetSchemaName();
     public IClusterMembershipStore? ClusterMembershipStore { get; private set; }
     public ClusterMembershipOptions ClusterMembershipOptions { get; private set; } = new ClusterMembershipOptions {
         HeartbeatIntervalSeconds = 1,
@@ -17,11 +17,13 @@ public class ShardingFixture() : StoreFixtureBase<MsSqlContainer>(LogLevel.Infor
         MachineName              = Environment.MachineName
     };
     public string[]? Members { get; private set; }
+    public SqlServerLeaseManager? SqlServerLeaseManager { get; private set; }
 
     protected override void SetupServices(IServiceCollection services) {
-        services.AddEventuousSqlServer(Container.GetConnectionString(), _schemaName, true);
+        services.AddEventuousSqlServer(Container.GetConnectionString(), SchemaName, true);
         services.AddEventStore<SqlServerStore>();
         services.AddSqlServerClusterMembershipStore(ClusterMembershipOptions);
+        services.AddSqlServerShardLeaseManager(1000);
     }
 
     protected override MsSqlContainer CreateContainer() => SqlContainer.Create();
@@ -32,6 +34,7 @@ public class ShardingFixture() : StoreFixtureBase<MsSqlContainer>(LogLevel.Infor
         ClusterMembershipStore.MembershipChanged += (s, e) => {
             Members = e.Members;
         };
+        SqlServerLeaseManager = provider.GetRequiredService<SqlServerLeaseManager>();
     }
 
     public ClusterMembershipStore CreateNewClusterMembershipStore(string machine) {

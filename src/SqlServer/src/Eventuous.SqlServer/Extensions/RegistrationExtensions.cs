@@ -104,7 +104,7 @@ public static class ServiceCollectionExtensions {
             return services;
         }
 
-        public IServiceCollection AddSqlServerShardLeaseManager() {
+        public IServiceCollection AddSqlServerShardLeaseManager(int heartbeatInterval = 5000) {
             services.AddSingleton(sp => {
                 var storeOptions = sp.GetRequiredService<SqlServerStoreOptions>();
                 var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
@@ -113,6 +113,7 @@ public static class ServiceCollectionExtensions {
             });
             services.AddHostedService(sp =>
                 new SqlServerLeaseService(
+                    heartbeatInterval,
                     sp.GetRequiredService<SqlServerLeaseManager>(),
                     sp.GetRequiredService<ILogger<SqlServerLeaseService>>()
                 ));

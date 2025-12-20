@@ -11,7 +11,6 @@ public class ClusterMembershipStoreTests(ShardingFixture fixture) {
 
     [Test]
     [DependsOn(nameof(GetMembers))]
-    [Retry(3)]
     public async Task MembersLeasesAreRenewed() {
         var alternativeClusterMembershipStore = fixture.CreateNewClusterMembershipStore("another-machine");
         try {

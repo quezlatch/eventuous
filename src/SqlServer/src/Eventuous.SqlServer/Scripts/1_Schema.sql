@@ -96,7 +96,7 @@ IF TYPE_ID('__schema__.ShardIdList') IS NULL
     BEGIN
         CREATE TYPE __schema__.ShardIdList AS TABLE
         (
-            ShardId INT NOT NULL
+            shard_id INT NOT NULL
         );
     END
 

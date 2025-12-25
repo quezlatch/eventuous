@@ -8,14 +8,12 @@ public class ClusterMembershipService : IHostedService
     private readonly ILogger<ClusterMembershipService> _logger;
     private Timer? _renewalTimer;
     private Timer? _readTimer;
-    private readonly string _machineName;
     private readonly int _heartbeatInterval;
     private readonly int _refreshInterval;
     private readonly ClusterMembershipStoreBase _store;
 
     public ClusterMembershipService(ClusterMembershipStoreBase store, ClusterMembershipOptions options, ILogger<ClusterMembershipService> logger)
     {
-        _machineName = options.MachineName;
         _heartbeatInterval = options.HeartbeatIntervalSeconds * 1000;
         _refreshInterval = options.RefreshIntervalSeconds * 1000;
         _store = store;
@@ -24,7 +22,7 @@ public class ClusterMembershipService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Starting cluster membership store for machine: {MachineName}", _machineName);
+        _logger.LogInformation("Starting cluster membership store");
 
         // Register this machine
         await _store.RegisterMemberAsync(cancellationToken).NoContext();
@@ -51,12 +49,12 @@ public class ClusterMembershipService : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Stopping cluster membership store for machine: {MachineName}", _machineName);
+        _logger.LogInformation("Stopping cluster membership store");
 
         _renewalTimer?.Dispose();
         _readTimer?.Dispose();
 
         // Remove this machine from the cluster
-        await _store.UnregisterMemberAsync(_machineName, cancellationToken).NoContext();
+        await _store.UnregisterMemberAsync(cancellationToken).NoContext();
     }
 }

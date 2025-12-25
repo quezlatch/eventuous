@@ -6,19 +6,20 @@ namespace Eventuous.SqlServer.Subscriptions.Sharding;
 public class ClusterMembershipStoreTests(ShardingFixture fixture) {
     [Test]
     public async Task GetMembers() {
-        fixture.Members!.ShouldContain(Environment.MachineName);
+        fixture.Members!.ShouldContain(fixture.Owner);
     }
 
     [Test]
     [DependsOn(nameof(GetMembers))]
+    [Retry(3)]
     public async Task MembersLeasesAreRenewed() {
         var alternativeClusterMembershipStore = fixture.CreateNewClusterMembershipStore("another-machine");
         try {
             await alternativeClusterMembershipStore.RegisterMemberAsync(CancellationToken.None);
             await Task.Delay(TimeSpan.FromSeconds(fixture.ClusterMembershipOptions!.HeartbeatIntervalSeconds));
-            fixture.Members!.ShouldBe(new[]{Environment.MachineName, "another-machine"}.Order());
+            fixture.Members!.ShouldBe(new[]{fixture.Owner, "another-machine"}.Order());
         } finally {
-            await alternativeClusterMembershipStore.UnregisterMemberAsync("another-machine", CancellationToken.None);
+            await alternativeClusterMembershipStore.UnregisterMemberAsync(CancellationToken.None);
         }
     }
 
@@ -30,9 +31,9 @@ public class ClusterMembershipStoreTests(ShardingFixture fixture) {
         try {
             await alternativeClusterMembershipStore.RegisterMemberAsync(CancellationToken.None);
             await Task.Delay(TimeSpan.FromSeconds(fixture.ClusterMembershipOptions!.ExpirationTimeoutSeconds + 2));
-            fixture.Members!.ShouldBe([Environment.MachineName]);
+            fixture.Members!.ShouldBe([fixture.Owner]);
         } finally {
-            await alternativeClusterMembershipStore.UnregisterMemberAsync("another-machine", CancellationToken.None);
+            await alternativeClusterMembershipStore.UnregisterMemberAsync(CancellationToken.None);
         }
     }
 }

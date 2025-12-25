@@ -13,7 +13,7 @@ public class ClusterMembershipStore : ClusterMembershipStoreBase
     private readonly ILogger<ClusterMembershipStore> logger;
 
     public ClusterMembershipStore(SqlServerStoreOptions options, ClusterMembershipOptions clusterOptions, ILoggerFactory loggerFactory) 
-    : base(clusterOptions, loggerFactory)
+    : base(options, clusterOptions, loggerFactory)
     {
         connectionString = Ensure.NotEmptyString(options.ConnectionString);
         schema = Ensure.NotEmptyString(options.Schema);
@@ -53,13 +53,13 @@ public class ClusterMembershipStore : ClusterMembershipStoreBase
         .Add("@ExpirationTimeout", SqlDbType.Int, _expirationTimeout);
         await cmd.ExecuteNonQueryAsync().NoContext();
     }
-    public override async Task UnregisterMemberAsync(string machineName, CancellationToken cancellationToken) {
-        logger.LogInformation("Unregistering cluster member: {MachineName}", machineName);
+    public override async Task UnregisterMemberAsync(CancellationToken cancellationToken) {
+        logger.LogInformation("Unregistering cluster member: {MachineName}", _machineName);
         await using var connection = await ConnectionFactory.GetConnection(connectionString, cancellationToken).NoContext();
         using var cmd = connection.GetTextCommand(
             $@"DELETE FROM {schema}.ClusterMembers WHERE MachineName = @MachineName"
         )
-        .Add("@MachineName", SqlDbType.NVarChar, machineName);
+        .Add("@MachineName", SqlDbType.NVarChar, _machineName);
         await cmd.ExecuteNonQueryAsync(cancellationToken).NoContext();
     }
 

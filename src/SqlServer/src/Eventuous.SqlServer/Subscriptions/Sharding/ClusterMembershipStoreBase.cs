@@ -19,11 +19,11 @@ public abstract class ClusterMembershipStoreBase : IClusterMembershipStore
 
     public event EventHandler<MembershipChangedEventArgs> MembershipChanged;
 
-    protected ClusterMembershipStoreBase(ClusterMembershipOptions options, ILoggerFactory loggerFactory)
+    protected ClusterMembershipStoreBase(SqlServerStoreOptions options, ClusterMembershipOptions clusterOptions, ILoggerFactory loggerFactory)
     {
-        _expirationTimeout = options.ExpirationTimeoutSeconds;
+        _expirationTimeout = clusterOptions.ExpirationTimeoutSeconds;
         _logger = loggerFactory.CreateLogger<ClusterMembershipStoreBase>();
-        _machineName = options.MachineName;
+        _machineName = options.Owner;
     }
 
     public async Task ReadMembersAsync()
@@ -32,6 +32,13 @@ public abstract class ClusterMembershipStoreBase : IClusterMembershipStore
         {
             var members = await ReadActiveMembersAsync().NoContext();
             var orderedMembers = members.Order().ToArray();
+
+            if (orderedMembers.Length == 0)
+            {
+                _logger.LogWarning("No active cluster members found for machine: {MachineName}", _machineName);
+                return;
+            }
+            
             if (!orderedMembers.SequenceEqual(_members))
             {
                 _members = [.. orderedMembers];
@@ -63,5 +70,5 @@ public abstract class ClusterMembershipStoreBase : IClusterMembershipStore
     /// <summary>
     /// Remove the machine from the cluster membership table.
     /// </summary>
-    public abstract Task UnregisterMemberAsync(string machineName,CancellationToken cancellationToken);
+    public abstract Task UnregisterMemberAsync(CancellationToken cancellationToken);
 }

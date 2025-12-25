@@ -9,5 +9,4 @@ public record ClusterMembershipOptions {
     public int HeartbeatIntervalSeconds { get; init; } = 15;
     public int ExpirationTimeoutSeconds { get; init; } = 45;
     public int RefreshIntervalSeconds { get; init; } = 10;
-    public string MachineName { get; init; } = Environment.MachineName;
 }

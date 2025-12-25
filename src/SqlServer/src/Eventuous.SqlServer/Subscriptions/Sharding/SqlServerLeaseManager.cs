@@ -6,6 +6,7 @@ namespace Eventuous.SqlServer.Subscriptions.Sharding;
 
 public class SqlServerLeaseManager {
     readonly IClusterMembershipStore store;
+    readonly int expirationTimeoutSeconds;
     readonly string connectionString;
     readonly string schemaName;
     readonly int numOfShards;
@@ -13,14 +14,15 @@ public class SqlServerLeaseManager {
     private readonly string aquireLease;
     private DataTable? _shardIdsTableVariable;
 
-    public SqlServerLeaseManager(IClusterMembershipStore store, string connectionString, string schemaName, int numOfShards = 20, ILogger<SqlServerLeaseManager>? logger = null)
+    public SqlServerLeaseManager(IClusterMembershipStore store, SqlServerStoreOptions options, int expirationTimeoutSeconds, ILogger<SqlServerLeaseManager>? logger = null)
     {
-        var schema = new Schema(schemaName);
+        var schema = new Schema(options.Schema);
         this.store = store;
+        this.expirationTimeoutSeconds = expirationTimeoutSeconds;
         this.store.MembershipChanged += RebuildShardIdParameter;
-        this.connectionString = connectionString;
-        this.schemaName = schemaName;
-        this.numOfShards = numOfShards;
+        this.connectionString = options.ConnectionString ?? throw new ArgumentNullException(nameof(options.ConnectionString));
+        this.schemaName = options.Schema;
+        this.numOfShards = options.NumOfShards;
         this.logger = logger;
         this.aquireLease = schema.AquireLease;
     }
@@ -32,6 +34,11 @@ public class SqlServerLeaseManager {
     /// <param name="sender"></param>
     /// <param name="e"></param>
     private void RebuildShardIdParameter(object? sender, MembershipChangedEventArgs e) {
+        logger?.LogInformation("Rebuilding shard ID parameter for owner {Owner}", store.Owner);
+        if (e.Members.Length == 0) {
+            logger?.LogWarning("No cluster members found, cannot build shard ID parameter");
+            return;
+        }
         var hasher = new RendezvousHashing(e.Members);
         var owner = store.Owner;
         var shardIds = Enumerable.Range(0, numOfShards)
@@ -52,7 +59,7 @@ public class SqlServerLeaseManager {
         await using var connection = await ConnectionFactory.GetConnection(connectionString, CancellationToken.None).NoContext();
         using var cmd = connection.GetStoredProcCommand(aquireLease)
             .Add("@owner", SqlDbType.NVarChar, store.Owner)
-            .Add("@expiration_timeout", SqlDbType.BigInt, 30) // 30 seconds
+            .Add("@expiration_timeout", SqlDbType.BigInt, expirationTimeoutSeconds)
             .Add("@shard_ids", SqlDbType.Structured, _shardIdsTableVariable);
         await cmd.ExecuteNonQueryAsync().NoContext();
         logger?.LogInformation("Renewed leases for shards");

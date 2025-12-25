@@ -11,6 +11,7 @@ public class Schema(string schema = Schema.DefaultSchema, int numOfShards = 20) 
 
     public readonly string AppendEvents        = $"{schema}.append_events";
     public readonly string ReadStreamForwards  = $"{schema}.read_stream_forwards";
+    public readonly string ReadStreamForwardsSharded  = $"{schema}.read_stream_forwards_sharded";
     public readonly string ReadStreamBackwards = $"{schema}.read_stream_backwards";
     public readonly string ReadStreamSub       = $"{schema}.read_stream_sub";
     public readonly string ReadAllForwards     = $"{schema}.read_all_forwards";

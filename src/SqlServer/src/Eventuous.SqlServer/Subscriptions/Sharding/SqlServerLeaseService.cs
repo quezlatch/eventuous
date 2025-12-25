@@ -3,9 +3,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Eventuous.SqlServer.Subscriptions.Sharding;
 
-public class SqlServerLeaseService(int heartbeatInterval, SqlServerLeaseManager leaseManager, ILogger<SqlServerLeaseService> logger) : IHostedService {
+public class SqlServerLeaseService(int heartbeatIntervalSeconds, SqlServerLeaseManager leaseManager, ILogger<SqlServerLeaseService> logger) : IHostedService {
     private Timer? _renewalTimer;
-    private readonly int _heartbeatInterval = heartbeatInterval;
+    private readonly int _heartbeatInterval = heartbeatIntervalSeconds * 1000;
 
     public Task StartAsync(CancellationToken cancellationToken) {
         logger.LogInformation("Starting SQL Server lease manager");

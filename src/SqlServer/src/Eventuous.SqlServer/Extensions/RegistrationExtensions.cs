@@ -24,16 +24,22 @@ public static class ServiceCollectionExtensions {
         /// <param name="connectionString">Connection string</param>
         /// <param name="schema">Schema name</param>
         /// <param name="initializeDatabase">Set to true if you want the schema to be created on startup</param>
+        /// <param name="numOfShards"></param>
+        /// <param name="owner"></param>
         /// <returns></returns>
         public IServiceCollection AddEventuousSqlServer(
                 string connectionString,
                 string schema             = Schema.DefaultSchema,
-                bool   initializeDatabase = false
+                bool   initializeDatabase = false,
+                int    numOfShards          = 20,
+                string? owner               = null
             ) {
             var options = new SqlServerStoreOptions {
                 Schema             = Ensure.NotEmptyString(schema),
                 ConnectionString   = Ensure.NotEmptyString(connectionString),
-                InitializeDatabase = initializeDatabase
+                InitializeDatabase = initializeDatabase,
+                NumOfShards        = numOfShards,
+                Owner              = owner ?? Environment.MachineName
             };
             services.AddSingleton(options);
             services.AddSingleton<SqlServerStore>();
@@ -104,16 +110,17 @@ public static class ServiceCollectionExtensions {
             return services;
         }
 
-        public IServiceCollection AddSqlServerShardLeaseManager(int heartbeatInterval = 5000) {
+        public IServiceCollection AddSqlServerShardLeaseManager(int heartbeatIntervalSeconds = 5, int expirationTimeoutSeconds = 30) {
             services.AddSingleton(sp => {
                 var storeOptions = sp.GetRequiredService<SqlServerStoreOptions>();
                 var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
                 var clusterMembership = sp.GetRequiredService<IClusterMembershipStore>();
-                return new SqlServerLeaseManager(clusterMembership, storeOptions.ConnectionString!, storeOptions.Schema, storeOptions.NumOfShards);
+                var logger = loggerFactory.CreateLogger<SqlServerLeaseManager>();
+                return new SqlServerLeaseManager(clusterMembership, storeOptions, expirationTimeoutSeconds, logger);
             });
             services.AddHostedService(sp =>
                 new SqlServerLeaseService(
-                    heartbeatInterval,
+                    heartbeatIntervalSeconds,
                     sp.GetRequiredService<SqlServerLeaseManager>(),
                     sp.GetRequiredService<ILogger<SqlServerLeaseService>>()
                 ));

@@ -14,6 +14,7 @@ public record SqlServerStoreOptions {
     public string  Schema             { get; init; } = SqlServer.Schema.DefaultSchema;
     public bool    InitializeDatabase { get; init; }
     public int     NumOfShards        { get; init; } = 20;
+    public string  Owner             { get; init; } = Environment.MachineName;
 }
 
 public class SqlServerStore : SqlEventStoreBase<SqlConnection, SqlTransaction> {

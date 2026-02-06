@@ -13,8 +13,7 @@ public class RenewLease(ShardingFixture fixture) {
         await using var connection = await ConnectionFactory.GetConnection(fixture.Container.GetConnectionString(), CancellationToken.None);
         using var cmd = connection.CreateCommand();
         cmd.CommandType = System.Data.CommandType.Text;
-        cmd.CommandText =
-            $"SELECT * FROM {fixture.SchemaName}.ShardLeases";
+        cmd.CommandText = $"SELECT * FROM {fixture.SchemaName}.ShardLeases";
         var reader = await cmd.ExecuteReaderAsync();
         var now = DateTime.UtcNow;
         while (await reader.ReadAsync()) {

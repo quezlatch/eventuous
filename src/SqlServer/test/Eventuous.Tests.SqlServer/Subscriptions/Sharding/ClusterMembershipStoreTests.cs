@@ -1,6 +1,7 @@
+using Eventuous.SqlServer.Subscriptions.Sharding;
 using Shouldly;
 
-namespace Eventuous.SqlServer.Subscriptions.Sharding;
+namespace Eventuous.Tests.SqlServer.Subscriptions.Sharding;
 
 [ClassDataSource<ShardingFixture>]
 public class ClusterMembershipStoreTests(ShardingFixture fixture) {
